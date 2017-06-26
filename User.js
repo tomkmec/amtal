@@ -25,7 +25,6 @@ class User {
     var processResponse = _.has(options,'processResponse') ? options.processResponse : true;
 
     return () => new Promise((resolve) => {
-
       var httpOptions = _.extend({
         protocol: 'http:',
         // host: host,
@@ -56,7 +55,7 @@ class User {
       this.testContext.requests.push(logEntry);
       // logCollection.insertOne(logEntry, (error, result) => logEntryId = result.insertedId)
 
-      var request = http.request(options);
+      var request = http.request(httpOptions);
       var responseBody = '';
 
       request.on('error', (e) => {

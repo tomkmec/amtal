@@ -58,7 +58,7 @@ class TestContext {
       this.users = _.without(this.users, user);
       util.log(this.rampup, this.users.length)
       if (this.users.length == 0) {
-        this.finalResoluton(this.requests);
+        this.finalResoluton(this);
       }
     }
   }  

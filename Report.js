@@ -14,7 +14,9 @@ class Report {
   }
 
   exportPromise() {
-    return (rawData) => {
+    return (testContext) => {
+      let rawData = testContext.requests;
+      let userFn = testContext.userFn;
       let testDuration = _.last(rawData).msFromStart/1000;
       var timeGranurality = _.chain(POSSIBLE_GRANURALITY)
         .reverse()
@@ -27,6 +29,7 @@ class Report {
         .mapObject((v,k) => v/timeGranurality)
         .value();
       reportBase.time = _.mapObject(reportBase.req_s, (value, key) => util.formatTime(1000 * key * timeGranurality))
+      reportBase.users = _.mapObject(reportBase.time, (value, key) => userFn(1000 * key * timeGranurality))
       _.chain(rawData)
         .groupBy(e => e.name)
         .each((items, name) => {
@@ -51,7 +54,6 @@ class Report {
         }))
         .then(() => Promise.all([
           new Promise((resolve, reject) => {
-            console.log(this.options.dir)
             let fpath = path.join(this.options.dir, "rawData.csv");
             let headers = 
             "Time from start [ms],Request name,Path,User #,Response code,Response bytes,Time send [ms],Time wait [ms], Time receive [ms], Time total [ms]";
@@ -104,6 +106,34 @@ class Report {
                   reject(err);
                 } else {
                   console.log(`Exported report to ${fpath}`);
+                  resolve();
+                }
+              }
+            );
+          }),
+          new Promise((resolve, reject) => {
+            fs.createReadStream(path.join(__dirname, 'template', 'results.html'))
+              .pipe(fs.createWriteStream(path.join(this.options.dir, "results.html")));
+            let fpath = path.join(this.options.dir, "chartData.js");
+
+            let chartData = {
+              labels: _.pluck(report, 'time'),
+              datasets: [{
+                label: 'Requests per second',
+                data: _.pluck(report, 'req_s')
+              }]
+            };
+
+            fs.writeFile(
+              fpath, 
+              `let results = { data: ${JSON.stringify(chartData, null, 2)} };`,
+              'utf8',
+              (err) => {
+                if (err) {
+                  console.log(`Error exporting chart data to ${fpath}: ${err.message}`);
+                  reject(err);
+                } else {
+                  console.log(`Exported chart data to ${fpath}`);
                   resolve();
                 }
               }

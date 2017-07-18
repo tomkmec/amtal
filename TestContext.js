@@ -52,7 +52,12 @@ class TestContext {
   runOrDestroy(user, scenario) {
     if (this.users.length <= this.userFn(Date.now() - this.startTime)) {
       user.reinit();
-      scenario(user).then(() => this.runOrDestroy(user, scenario));
+      scenario(user)
+        .then(() => this.runOrDestroy(user, scenario))
+        .catch(error => {
+          console.log(`Error while running scenario for user #${user.num}: ${error}`);
+          this.runOrDestroy(user, scenario)
+        });
     } else {
       user.destroy(); 
       this.users = _.without(this.users, user);

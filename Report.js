@@ -29,7 +29,7 @@ class Report {
         .mapObject((v,k) => v/timeGranurality)
         .value();
       reportBase.time = _.mapObject(reportBase.req_s, (value, key) => util.formatTime(1000 * key * timeGranurality))
-      reportBase.users = _.mapObject(reportBase.time, (value, key) => userFn(1000 * key * timeGranurality))
+      reportBase.users = _.mapObject(reportBase.time, (value, key) => Math.max(0, userFn(1000 * key * timeGranurality)))
       _.chain(rawData)
         .groupBy(e => e.name)
         .each((items, name) => {
@@ -93,7 +93,7 @@ class Report {
           }),
           new Promise((resolve, reject) => {
             let fpath = path.join(this.options.dir, "requests.csv");
-            let basicKeys = ['time_s', 'time', 'req_s'];
+            let basicKeys = ['time_s', 'time', 'req_s', 'users'];
             let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
             let header = "Time [s],Time,Requests per second," + dynKeys.join(",");
             fs.writeFile(
@@ -116,17 +116,40 @@ class Report {
               .pipe(fs.createWriteStream(path.join(this.options.dir, "results.html")));
             let fpath = path.join(this.options.dir, "chartData.js");
 
+            let basicKeys = ['time_s', 'time', 'req_s', 'users'];
+            let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
+
             let chartData = {
               labels: _.pluck(report, 'time'),
               datasets: [{
-                label: 'Requests per second',
-                data: _.pluck(report, 'req_s')
+                label: 'Requests per Second',
+                data: _.pluck(report, 'req_s'),
+                yAxisID: '1-s'
+              }, {
+                label: '# of Concurrent Users',
+                data: _.pluck(report, 'users'),
+                yAxisID: '1'
               }]
+            };
+
+            dynKeys.forEach(key => chartData.datasets.push({
+              label: key,
+              data: _.pluck(report, key),
+              yAxisID: 'ms'
+            }))
+
+
+            let chartOptions = {
+              yAxes: [
+                { id: "1/s", position: 'left' },
+                { id: "1", position: 'left' },
+                { id: "ms", position: 'right' }
+              ]
             };
 
             fs.writeFile(
               fpath, 
-              `let results = { data: ${JSON.stringify(chartData, null, 2)} };`,
+              `let results = { type: 'line', options: ${JSON.stringify(chartOptions, null, 2)}, data: ${JSON.stringify(chartData, null, 2)} };`,
               'utf8',
               (err) => {
                 if (err) {

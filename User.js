@@ -21,10 +21,11 @@ class User {
 
   _request(method, name, path, data, options) {
     var self = this;
-    path = new Function("return `"+path+"`;").call(self.context);
-    var processResponse = _.has(options,'processResponse') ? options.processResponse : true;
 
     return () => new Promise((resolve) => {
+      path = new Function("return `"+path+"`;").call(self.context);
+      var processResponse = _.has(options,'processResponse') ? options.processResponse : true;
+
       var httpOptions = _.extend({
         protocol: 'http:',
         // host: host,

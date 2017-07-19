@@ -31,7 +31,7 @@ class TestContext {
     var interval = setInterval(() => {
       var time = Date.now() - this.startTime;
       var desiredUsers = this.userFn(time);
-      util.log(this.rampup, this.users.length)
+      util.log(time, this)
       if (desiredUsers > this.users.length) {
         this.startUser(this.users.length + 1, this.scenario);
       } else if (desiredUsers == -1) {
@@ -61,7 +61,7 @@ class TestContext {
     } else {
       user.destroy(); 
       this.users = _.without(this.users, user);
-      util.log(this.rampup, this.users.length)
+      util.log(Date.now() - this.startTime, this, true)
       if (this.users.length == 0) {
         this.finalResoluton(this);
       }

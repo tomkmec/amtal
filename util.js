@@ -1,10 +1,20 @@
 let _ = require('underscore')
 
-module.exports = {
-	log: function(rampup, users) {
-	  // var cr = process.platform.match(/win.*/) ? '\033[0G' : '\r';
-	  // process.stdout.write(users + " users active" + cr);
-	  console.log(users);
+var util = module.exports = {
+	lpad: function(str, width) {
+		str = ''+str;
+		return str.length >= width? str : " ".repeat(width-str.length) + str;
+	},
+
+	log: function(time, context, winddown) {
+	  var cr = process.platform.match(/win.*/) ? '\033[0G' : '\r';
+	  var status = winddown? "Winding down" : (util.formatTime(time) + " Running");
+	  var users = context.users.length;
+	  var requests = _.filter(context.requests, (r) => r.msFromStart > time - 5000);
+	  var req_s = Math.round(requests.length/5);
+	  var throughput = Math.round(requests.reduce((sum, val) => sum + val.responseSize, 0) / 5120);
+	  process.stdout.write(`${status} | ${util.lpad(users,4)} users | ${util.lpad(req_s,3)} req/s | ${util.lpad(throughput,6)} kB/s                          ${cr}`);
+	  // console.log(users);
 	},
 
 	ms: function(hr2, hr1 = [0,0]) {

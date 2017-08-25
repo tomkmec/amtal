@@ -119,6 +119,10 @@ class User {
     return this._request('POST', name, path, JSON.stringify(data), processResponse)
   }
 
+  PUT(name, path, data, processResponse = true) {
+    return this._request('PUT', name, path, JSON.stringify(data), processResponse)
+  }
+
   wait(seconds) {
     return () => new Promise((resolve, reject) => setTimeout(resolve, seconds*1000));//*WAIT_MULTIPLIER);
   }

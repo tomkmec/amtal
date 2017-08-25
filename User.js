@@ -1,10 +1,15 @@
 let _ = require('underscore')
   , http = require("http")
+  , https = require("https")
+  , protocols = {'http:' : http, 'https:' : https}
   , util = require('./util.js')
 
 class User {
   constructor(num, testContext) {
-    this.agent = new http.Agent({keepAlive: true});
+    // this.agents = {
+    //   'http:' : new http.Agent({keepAlive: true}),
+    //   'https:' : new https.Agent({keepAlive: true})
+    // };
     this.num = num;
     this.testContext = testContext;
   }
@@ -16,7 +21,8 @@ class User {
   }
 
   destroy() {
-    this.agent.destroy();
+    // this.agents['http:'].destroy();
+    // this.agents['https:'].destroy();
   }
 
   _request(method, name, path, data, options) {
@@ -29,7 +35,7 @@ class User {
       var httpOptions = _.extend({
         protocol: 'http:',
         // host: host,
-        port: 80,
+        // port: 80,
         method: method,
         path: path,
         headers: {}
@@ -56,7 +62,7 @@ class User {
       this.testContext.requests.push(logEntry);
       // logCollection.insertOne(logEntry, (error, result) => logEntryId = result.insertedId)
 
-      var request = http.request(httpOptions);
+      var request = protocols[httpOptions.protocol].request(httpOptions);
       var responseBody = '';
 
       request.on('error', (e) => {

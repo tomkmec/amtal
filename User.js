@@ -6,10 +6,10 @@ let _ = require('underscore')
 
 class User {
   constructor(num, testContext) {
-    // this.agents = {
-    //   'http:' : new http.Agent({keepAlive: true}),
-    //   'https:' : new https.Agent({keepAlive: true})
-    // };
+    this.agents = {
+      'http:' : new http.Agent({keepAlive: true}),
+      'https:' : new https.Agent({keepAlive: true})
+    };
     this.num = num;
     this.testContext = testContext;
   }
@@ -21,8 +21,8 @@ class User {
   }
 
   destroy() {
-    // this.agents['http:'].destroy();
-    // this.agents['https:'].destroy();
+    this.agents['http:'].destroy();
+    this.agents['https:'].destroy();
   }
 
   _request(method, name, path, data, options) {
@@ -47,6 +47,8 @@ class User {
       })
       httpOptions.headers.Cookie = // TODO join
         Array.from(self.jar.keys()).map((k) => `${k}=${self.jar.get(k)}`).join('; ');
+
+      httpOptions.agent = self.agents[httpOptions.protocol];
 
       var logEntry = {
         status: 'fresh',

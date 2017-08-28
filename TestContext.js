@@ -10,7 +10,7 @@ class TestContext {
     this.requests = [];
     this.users = [];
 
-    this.rampupArray = _.chain(rampup).pairs().map(pair => [parseFloat(pair[0]), pair[1]]).value();
+    this.rampupArray = _.chain(rampup).pairs().map(pair => [util.parseTime(pair[0])/60, pair[1]]).value();
     this.userFn = ms => {
       var s = ms/1000;
       var min = s / 60;

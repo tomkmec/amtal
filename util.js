@@ -43,6 +43,10 @@ var util = module.exports = {
 			.replace(/^00:/,'')
 	},
 	parseTime: function(time) {
-		return time.split(':').map(s => parseFloat(s)).reduce((memo, val) => memo*60+val, 0)
+		if (parseFloat(time)==time) {
+			return parseFloat(time) * 60;
+		} else {
+			return time.split(':').map(s => parseFloat(s)).reduce((memo, val) => memo*60+val, 0)
+		}
 	}
 }

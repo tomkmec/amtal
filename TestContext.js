@@ -3,25 +3,35 @@ let User = require('./User.js')
   , _ = require('underscore')
 
 class TestContext {
-  constructor(scenario, configuration, rampup) {
-    this.scenario = scenario;
-    this.configuration = configuration;
+  constructor(scenarios, configuration, rampup) {
+    this.scenarios = scenarios;
     this.rampup = rampup;
-    this.requests = [];
-    this.users = [];
+    if (!_.isArray(this.rampup)) this.rampup = [this.rampup];
+    if (!_.isArray(this.scenarios)) this.scenarios = [this.scenarios];
 
-    this.rampupArray = _.chain(rampup).pairs().map(pair => [util.parseTime(pair[0])/60, pair[1]]).value();
+    if (this.rampup.length != this.scenarios.length) {
+      console.log(`${this.scenarios.length} scenarios provided, but rampup has ${this.rampup.length} elements!`);
+      process.exit(1);
+    }
+
+    this.configuration = configuration;
+    this.requests = [];
+    this.users = _.map(new Array(this.rampup.length), x => []);
+
+    this.rampupArray = _.map(this.rampup, scenario => _.chain(scenario).pairs().map(pair => [util.parseTime(pair[0])/60, pair[1]]).sortBy(parir => parir[0]).value());
     this.userFn = ms => {
       var s = ms/1000;
       var min = s / 60;
-      for (var i=0; i<this.rampupArray.length-1; i++) {
-        if (this.rampupArray[i][0] <= min && this.rampupArray[i+1][0] > min) {
-          return Math.floor(this.rampupArray[i][1] 
-            + (this.rampupArray[i+1][1]-this.rampupArray[i][1])
-              * ((min-this.rampupArray[i][0])/(this.rampupArray[i+1][0]-this.rampupArray[i][0])))
+      var result = _.map(this.rampupArray, rampupElement => {
+        for (var i=0; i<rampupElement.length-1; i++) {
+          if (rampupElement[i][0] <= min && rampupElement[i+1][0] > min) {
+            return Math.floor(rampupElement[i][1] 
+              + (rampupElement[i+1][1]-rampupElement[i][1])
+                * ((min-rampupElement[i][0])/(rampupElement[i+1][0]-rampupElement[i][0])))
+          }
         }
-      }
-      return -1;
+      })
+      return _.max(result) > -1 ? result : -1;
     };
   }
 
@@ -32,37 +42,41 @@ class TestContext {
       var time = Date.now() - this.startTime;
       var desiredUsers = this.userFn(time);
       util.log(time, this)
-      if (desiredUsers > this.users.length) {
-        this.startUser(this.users.length + 1, this.scenario);
-      } else if (desiredUsers == -1) {
+      if (desiredUsers === -1) {
         clearInterval(interval);
+      } else {
+        _.each(desiredUsers, (desiredForScenario, i) => { 
+          if (desiredForScenario > this.users[i].length) {
+            this.startUser(i, this.users[i].length + 1, this.scenarios[i]);
+          } 
+        });
       }
     }, 1000)
 
     return new Promise((resolve) => this.finalResoluton = resolve);
   }
 
-  startUser(number, scenario) {
+  startUser(scenarioNumber, number, scenario) {
     var user = new User(number, this);
-    this.users.push(user);
+    this.users[scenarioNumber].push(user);
 
-    this.runOrDestroy(user, scenario);
+    this.runOrDestroy(scenarioNumber, user, scenario);
   }
 
-  runOrDestroy(user, scenario) {
-    if (this.users.length <= this.userFn(Date.now() - this.startTime)) {
+  runOrDestroy(scenarioNumber, user, scenario) {
+    if (this.users[scenarioNumber].length <= this.userFn(Date.now() - this.startTime)[scenarioNumber]) {
       user.reinit();
       scenario(user)
-        .then(() => this.runOrDestroy(user, scenario))
+        .then(() => this.runOrDestroy(scenarioNumber, user, scenario))
         .catch(error => {
-          console.log(`Error while running scenario for user #${user.num}: ${error}`);
-          this.runOrDestroy(user, scenario)
+          console.log(`Error while running scenario #${scenarioNumber} for user #${user.num}: ${error}`);
+          this.runOrDestroy(scenarioNumber, user, scenario)
         });
     } else {
       user.destroy(); 
-      this.users = _.without(this.users, user);
+      this.users[scenarioNumber] = _.without(this.users[scenarioNumber], user);
       util.log(Date.now() - this.startTime, this, true)
-      if (this.users.length == 0) {
+      if (this.userFn(Date.now() - this.startTime) === -1 && _.flatten(this.users).length == 0) {
         this.finalResoluton(this);
       }
     }

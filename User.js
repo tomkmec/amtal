@@ -3,6 +3,7 @@ let _ = require('underscore')
   , https = require("https")
   , protocols = {'http:' : http, 'https:' : https}
   , util = require('./util.js')
+  , TestContext = require('./TestContext.js')
 
 class User {
   constructor(num, testContext) {
@@ -135,7 +136,7 @@ class User {
     return () => new Promise((resolve, reject) => setTimeout(resolve, seconds*1000));//*WAIT_MULTIPLIER);
   }
 }
-
+/*
 class TestContext {
   constructor(scenario, configuration, rampup) {
     this.scenario = scenario;
@@ -197,5 +198,5 @@ class TestContext {
     }
   }  
 }
-
+*/
 module.exports = User;

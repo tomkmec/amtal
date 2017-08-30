@@ -6,6 +6,12 @@ Simple load testing tool done out of sheer desperation to load test [Sapho](http
 
 Aimed at easy scripting of real-world API usage
 
+## When use Amtal
+
+If you want to write a complex test script of REST API simulating real service usage, are not afraid of little Javascript, if you want to run the script on your infrastructure and not pay a dime for the tool, Amtal is for you.
+
+If you want to record web app usage and then just replay it, or smash a few resources as hard as you can with no logic involved, there are lot of tools out there, probably better suited for the task.
+
 ## Basic Usage
 ```javascript
     let amtal = require('amtal');

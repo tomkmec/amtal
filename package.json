@@ -1,8 +1,8 @@
 {
 	"name": "amtal",
-	"version": "0.1.4",
+	"version": "0.2.0-SNAPSHOT",
 	"description": "To know a thing well, know its limits. Only when pushed beyond its tolerances will true nature be seen.",
-	"keywords": ["load test", "stress test"],
+	"keywords": ["load test", "stress test", "performance test"],
 	"author": {
 		"name": "Tom Kmec",
 		"email": "tom.kmec@gmail.com"

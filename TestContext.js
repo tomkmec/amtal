@@ -16,6 +16,7 @@ class TestContext {
 
     this.configuration = configuration;
     this.requests = [];
+    this.transactions = [];
     this.users = _.map(new Array(this.rampup.length), x => []);
 
     this.rampupArray = _.map(this.rampup, scenario => _.chain(scenario).pairs().map(pair => [util.parseTime(pair[0])/60, pair[1]]).sortBy(parir => parir[0]).value());

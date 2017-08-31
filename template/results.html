@@ -22,11 +22,29 @@
 </head>
 <body>
 
+<h1> Concurrent Users and Requests per Second Over Time </h1>
 <div style="height:400px; width:100%;">
-    <canvas id="myChart" width="100" height="100"></canvas>
+    <canvas id="rps" width="100" height="100"></canvas>
 </div>
 
-<table>
+<h1> Concurrent Users and Transactions Length Over Time </h1>
+<div style="height:400px; width:100%;">
+    <canvas id="t" width="100" height="100"></canvas>
+</div>
+
+<table id="transactions">
+    <thead>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+
+<h1> Concurrent Users and Requests Server Time Over Time </h1>
+<div style="height:400px; width:100%;">
+    <canvas id="r" width="100" height="100"></canvas>
+</div>
+
+<table id="requests">
     <thead>
     </thead>
     <tbody>
@@ -35,22 +53,35 @@
 
 <script>
 var colors = ["#444444","#7ac224","#7537ce","#58bf4c","#c948d5","#c9b732","#535fdb","#ef8a22","#522f91","#a3b94b","#e047b4","#5dc286","#f04514","#577ccd","#d9992a","#a671d9","#3a8138","#e43f85","#6a8930","#a13182","#9b8b2b","#c77ac3","#384919","#d92d2a","#53b9bb","#db314e","#5c9b7a","#ea5d36","#5d9cc5","#da752e","#404675","#d5a35a","#682963","#a8ae78","#a63559","#2e624a","#e55f6f","#a999d1","#ab3c19","#8e5980","#a1672b","#e27aa6","#7e6f3a","#cf97b0","#7c361c","#d39e80","#642534","#e07f5d","#69442e","#a33737","#c77877"];
-results.data.datasets.forEach((set, i) => {
-    set.fill = false;
-    set.lineTension = 0;
-    set.borderColor = colors[i % colors.length];
+['rpsData', 'rData', 'tData'].forEach(data => {
+    results[data].datasets.forEach((set, i) => {
+        set.fill = false;
+        set.lineTension = 0;
+        set.borderColor = colors[i % colors.length];
+    })
 })
 
-var ctx = document.getElementById("myChart").getContext('2d');
-
-var myChart = new Chart(ctx, {
+var rpsChart = new Chart(document.getElementById("rps").getContext('2d'), {
     type: 'line',
-    data: results.data,
+    data: results.rpsData,
     options: {
         maintainAspectRatio: false,
         scales: {
             yAxes: [
-                { id: "1-s", position: 'left', ticks: { beginAtZero:true } },
+                { id: "1-s", position: 'right', ticks: { beginAtZero:true } },
+                { id: "1", position: 'left', ticks: { beginAtZero:true }  }
+            ]
+        }
+    }
+});
+
+var tChart = new Chart(document.getElementById("t").getContext('2d'), {
+    type: 'line',
+    data: results.tData,
+    options: {
+        maintainAspectRatio: false,
+        scales: {
+            yAxes: [
                 { id: "1", position: 'left', ticks: { beginAtZero:true }  },
                 { id: "ms", position: 'right', ticks: { beginAtZero:true } }
             ]
@@ -58,10 +89,24 @@ var myChart = new Chart(ctx, {
     }
 });
 
-$('thead').append(
+var rChart = new Chart(document.getElementById("r").getContext('2d'), {
+    type: 'line',
+    data: results.rData,
+    options: {
+        maintainAspectRatio: false,
+        scales: {
+            yAxes: [
+                { id: "1", position: 'left', ticks: { beginAtZero:true }  },
+                { id: "ms", position: 'right', ticks: { beginAtZero:true } }
+            ]
+        }
+    }
+});
+
+$('#transactions thead').append(
     $('<tr>').append(
         $('<th>').attr('rowspan', 2).html("Time"),
-        results.data.datasets
+        results.tData.datasets
             .filter(set => !set.label.endsWith(' Max'))
             .map(set => 
                 $('<th>')
@@ -71,7 +116,7 @@ $('thead').append(
         )
     ),
     $('<tr>').append(
-        results.data.datasets
+        results.tData.datasets
             .filter(set => !!set.label.match(/ (Max|Avg)$/))
             .map(set => 
                 $('<th>')
@@ -79,11 +124,43 @@ $('thead').append(
         )
     ) 
 );
-results.data.labels.forEach((label, i) => {
-    $('tbody').append(
+results.tData.labels.forEach((label, i) => {
+    $('#transactions tbody').append(
         $('<tr>').append(
             $('<td>').html(label),
-            results.data.datasets.map(set => 
+            results.tData.datasets.map(set => 
+                $('<td>').html(!set.data[i] ? '' : set.data[i].toFixed(2))) 
+        ) 
+    );
+})
+
+
+$('#requests thead').append(
+    $('<tr>').append(
+        $('<th>').attr('rowspan', 2).html("Time"),
+        results.rData.datasets
+            .filter(set => !set.label.endsWith(' Max'))
+            .map(set => 
+                $('<th>')
+                    .attr('rowspan', set.label.endsWith(' Avg') ? 1 : 2)
+                    .attr('colspan', set.label.endsWith(' Avg') ? 2 : 1)
+                    .html(set.label.replace(/ (Max|Avg)$/, ''))
+        )
+    ),
+    $('<tr>').append(
+        results.rData.datasets
+            .filter(set => !!set.label.match(/ (Max|Avg)$/))
+            .map(set => 
+                $('<th>')
+                    .html(set.label.replace(/.*(Max|Avg)$/, '$1'))
+        )
+    ) 
+);
+results.rData.labels.forEach((label, i) => {
+    $('#requests tbody').append(
+        $('<tr>').append(
+            $('<td>').html(label),
+            results.rData.datasets.map(set => 
                 $('<td>').html(!set.data[i] ? '' : set.data[i].toFixed(2))) 
         ) 
     );

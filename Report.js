@@ -36,15 +36,37 @@ class Report {
           var preprocessed = _.chain(items)
             .groupBy((e => Math.floor(e.msFromStart/(1000 * timeGranurality))))
             .mapObject(group => _.filter(group, e => e.timing && e.timing.wait));
-        reportBase[name+" Avg"] = preprocessed.mapObject(values => 
-          _.chain(values).reduce((memo, num) => memo + parseFloat(num.timing.wait), 0).value() / values.length
-        ).value();
-        reportBase[name+" Max"] = preprocessed.mapObject(values =>
-          _.chain(values).map(value=>parseFloat(value.timing.wait)).max().value()
-        ).value();
-
-      });
+          reportBase[name+" Avg"] = preprocessed.mapObject(values => 
+            _.chain(values).reduce((memo, num) => memo + parseFloat(num.timing.wait), 0).value() / values.length
+          ).value();
+          reportBase[name+" Max"] = preprocessed.mapObject(values =>
+            _.chain(values).map(value=>parseFloat(value.timing.wait)).max().value()
+          ).value();
+        });
       let report = _.chain(util.invert(reportBase)).each((v,k)=>v.time_s=parseInt(k)).values().value();
+
+      //TODO extract the preprocessing, it's very similar
+      var transactionReportBase = {};
+      transactionReportBase.req_s = _.chain(testContext.transactions)
+        .countBy(t => Math.floor(t.startTime/(1000 * timeGranurality)))
+        .mapObject((v,k) => v/timeGranurality)
+        .value();
+      transactionReportBase.time = _.mapObject(transactionReportBase.req_s, (value, key) => util.formatTime(1000 * key * timeGranurality))
+      transactionReportBase.users = _.mapObject(transactionReportBase.time, (value, key) => Math.max(0, userFn(1000 * key * timeGranurality)))
+      _.chain(testContext.transactions)
+        .groupBy(e => e.name)
+        .each((items, name) => {
+          var preprocessed = _.chain(items)
+            .groupBy((e => Math.floor(e.startTime/(1000 * timeGranurality))))
+            .mapObject(group => _.filter(group, e => e.duration));
+          transactionReportBase[name+" Avg"] = preprocessed.mapObject(values => 
+            _.chain(values).reduce((memo, num) => memo + parseFloat(num.duration), 0).value() / values.length
+          ).value();
+          transactionReportBase[name+" Max"] = preprocessed.mapObject(values =>
+            _.chain(values).map(value=>parseFloat(value.duration)).max().value()
+          ).value();
+        });
+      let transactionsReport = _.chain(util.invert(transactionReportBase)).each((v,k)=>v.time_s=parseInt(k)).values().value();
 
       return Promise.resolve()
         .then(() => new Promise((resolve, reject) => {
@@ -59,6 +81,27 @@ class Report {
             "Time from start [ms],Request name,Path,User #,Response code,Response bytes,Time send [ms],Time wait [ms], Time receive [ms], Time total [ms]";
             let dataArray = rawData.map((r) => 
               [r.msFromStart, r.name, r.path, r.user, r.statusCode, r.responseSize, r.timing.send, r.timing.wait, r.timing.recv, r.timing.total]);
+            fs.writeFile(
+              fpath, 
+              [headers].concat(dataArray.map(row => row.join(','))).join('\n'),
+              'utf8',
+              (err) => {
+                if (err) {
+                  console.log(`Error exporting raw data to ${fpath}: ${err.message}`);
+                  reject(err);
+                } else {
+                  console.log(`Exported raw data to ${fpath}`);
+                  resolve();
+                }
+              }
+            );
+          }),
+          new Promise((resolve, reject) => {
+            let fpath = path.join(this.options.dir, "rawTransactions.csv");
+            let headers = 
+            "Start time [ms],Transaction name,User #,Duration [ms]";
+            let dataArray = testContext.transactions.map((r) => 
+              [r.startTime, r.name, r.user, r.duration]);
             fs.writeFile(
               fpath, 
               [headers].concat(dataArray.map(row => row.join(','))).join('\n'),
@@ -95,7 +138,7 @@ class Report {
             let fpath = path.join(this.options.dir, "requests.csv");
             let basicKeys = ['time_s', 'time', 'req_s', 'users'];
             let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
-            let header = "Time [s],Time,Requests per second," + dynKeys.join(",");
+            let header = "Time [s],Time,Requests per second,# of users," + dynKeys.join(",");
             fs.writeFile(
               fpath, 
               [header].concat(report.map(r => basicKeys.concat(dynKeys).map(k => r[k]))).join('\n'),
@@ -117,9 +160,9 @@ class Report {
             let fpath = path.join(this.options.dir, "chartData.js");
 
             let basicKeys = ['time_s', 'time', 'req_s', 'users'];
-            let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
+            // let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
 
-            let chartData = {
+            let rpsData = {
               labels: _.pluck(report, 'time'),
               datasets: [{
                 label: 'Requests per Second',
@@ -132,16 +175,41 @@ class Report {
               }]
             };
 
-            dynKeys.forEach(key => chartData.datasets.push({
+
+            let rData = {
+              labels: _.pluck(report, 'time'),
+              datasets: [{
+                label: '# of Concurrent Users',
+                data: _.pluck(report, 'users'),
+                yAxisID: '1'
+              }]
+            };
+
+            Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1).forEach(key => rData.datasets.push({
               label: key,
               data: _.pluck(report, key),
               yAxisID: 'ms'
             }))
 
 
+            let tData = {
+              labels: _.pluck(transactionsReport, 'time'),
+              datasets: [{
+                label: '# of Concurrent Users',
+                data: _.pluck(transactionsReport, 'users'),
+                yAxisID: '1'
+              }]
+            };
+
+            Object.keys(transactionReportBase).filter(k => basicKeys.indexOf(k) == -1).forEach(key => tData.datasets.push({
+              label: key,
+              data: _.pluck(transactionsReport, key),
+              yAxisID: 'ms'
+            }))
+
             let chartOptions = {
               yAxes: [
-                { id: "1/s", position: 'left' },
+                { id: "1-s", position: 'left' },
                 { id: "1", position: 'left' },
                 { id: "ms", position: 'right' }
               ]
@@ -149,7 +217,7 @@ class Report {
 
             fs.writeFile(
               fpath, 
-              `let results = { type: 'line', options: ${JSON.stringify(chartOptions, null, 2)}, data: ${JSON.stringify(chartData, null, 2)} };`,
+              `let results = {\n type: 'line', options: ${JSON.stringify(chartOptions, null, 2)},\n rpsData: ${JSON.stringify(rpsData, null, 2)},\n rData: ${JSON.stringify(rData, null, 2)},\n tData: ${JSON.stringify(tData, null, 2)}\n};`,
               'utf8',
               (err) => {
                 if (err) {

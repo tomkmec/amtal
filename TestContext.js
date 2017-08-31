@@ -68,8 +68,8 @@ class TestContext {
       user.reinit();
       scenario(user)
         .then(() => this.runOrDestroy(scenarioNumber, user, scenario))
-        .catch(error => {
-          console.log(`Error while running scenario #${scenarioNumber} for user #${user.num}: ${error}`);
+        .catch((error) => {
+          console.log(`Error while running scenario #${scenarioNumber} for user #${user.num}: ${error.stack}`);
           this.runOrDestroy(scenarioNumber, user, scenario)
         });
     } else {

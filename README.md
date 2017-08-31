@@ -14,34 +14,34 @@ If you want to record web app usage and then just replay it, or smash a few reso
 
 ## Basic Usage
 ```javascript
-    let amtal = require('amtal');
+let amtal = require('amtal');
 
-    let scenario = user =>
-        Promise.resolve()
-        // Sequential requests with tink time in between:
-        .then(user.POST("Submit Login","/api/login", {user: "tom", "password": "123"})) // POST, PUT: request name, path, data [, options]
-        .then(user.wait(2))
-        .then(user.GET("Get Main Data", "/api/data"), {processResponse: true}) // GET: request name, path [, options]
-        // Parallel requests
-        .then(response => Promise.all(
-            JSON.parse(response.body).links.map(link => 
-                user.GET("Get " + link.name, link.url)())));
+let scenario = user =>
+    Promise.resolve()
+    // Sequential requests with tink time in between:
+    .then(user.POST("Submit Login","/api/login", {user: "tom", "password": "123"})) // POST, PUT: request name, path, data [, options]
+    .then(user.wait(2))
+    .then(user.GET("Get Main Data", "/api/data"), {processResponse: true}) // GET: request name, path [, options]
+    // Parallel requests
+    .then(response => Promise.all(
+        JSON.parse(response.body).links.map(link => 
+            user.GET("Get " + link.name, link.url)())));
 
-    let configuration = {
-        host: "api.acme.com"
-    };
+let configuration = {
+    host: "api.acme.com"
+};
 
-    let rampup = { 
-        0: 0, // minute => number of running users
-        '1:30': 5, // or 'h:m:s' => number of running users
-        2: 5,
-        5: 50,
-        10: 50
-    }
-    
-    amtal
-        .run(scenario, configuration, rampup)
-        .then(amtal.exportResults({dir:"results"}))
+let rampup = { 
+    0: 0, // minute => number of running users
+    '1:30': 5, // or 'h:m:s' => number of running users
+    2: 5,
+    5: 50,
+    10: 50
+}
+
+amtal
+    .run(scenario, configuration, rampup)
+    .then(amtal.exportResults({dir:"results"}))
 ```
 
 ## Promises Cookbook

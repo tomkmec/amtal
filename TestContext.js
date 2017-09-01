@@ -47,7 +47,7 @@ class TestContext {
         clearInterval(interval);
       } else {
         _.each(desiredUsers, (desiredForScenario, i) => { 
-          if (desiredForScenario > this.users[i].length) {
+          while (desiredForScenario > this.users[i].length) {
             this.startUser(i, this.users[i].length + 1, this.scenarios[i]);
           } 
         });

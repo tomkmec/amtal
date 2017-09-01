@@ -48,5 +48,13 @@ var util = module.exports = {
 		} else {
 			return time.split(':').map(s => parseFloat(s)).reduce((memo, val) => memo*60+val, 0)
 		}
+	},
+	getProp: function(object, prop) {
+		var dotPos = prop.indexOf('.');
+		if (dotPos == -1) {
+			return object[prop];
+		} else {
+			return util.getProp(object[prop.substring(0, dotPos)], prop.substring(dotPos + 1))
+		}
 	}
 }

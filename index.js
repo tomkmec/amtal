@@ -7,5 +7,6 @@ module.exports = {
 	},
 	exportResults: function(dir) {
 		return new Report(dir).exportPromise()
-	}
+	},
+	CSVFileStore: require('./CSVFileStore.js')
 }

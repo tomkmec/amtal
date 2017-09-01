@@ -44,13 +44,27 @@ class User {
     return () => new Promise((resolve) => {
       if (!!self.activeTransactions[name]) {
         var currentTime = Date.now() - self.testContext.startTime;
-        self.testContext.transactions.push(_.extend(self.activeTransactions[name], {
+        var transaction = _.extend(self.activeTransactions[name], {
           endTime: currentTime,
           duration: currentTime - self.activeTransactions[name].startTime
-        }))
+        });
+        self.testContext.transactions.push(transaction)
+        this.publishTransaction(transaction)
       }
       resolve();
     });
+  }
+
+  publishRequest(req) {
+    if (this.testContext.configuration.requestStore) {
+      this.testContext.configuration.requestStore.store(req);
+    }
+  }
+
+  publishTransaction(trans) {
+    if (this.testContext.configuration.transactionStore) {
+      this.testContext.configuration.transactionStore.store(trans);
+    }
   }
 
   _request(method, name, path, data, options) {
@@ -98,6 +112,7 @@ class User {
       request.on('error', (e) => {
         logEntry.status = 'error';
         logEntry.error = e.message;
+        this.publishRequest(logEntry)
         // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
         resolve();
       });
@@ -127,12 +142,14 @@ class User {
           }
           logEntry.status = 'closed';
           // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
+          this.publishRequest(logEntry)
           if (processResponse) resolve(responseBody); else resolve();
         });
         res.on('error', () => {
           logEntry.hrTime.finish = process.hrtime(logEntry.hrTime.init);
           logEntry.status = 'error';
           // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
+          this.publishRequest(logEntry)
           if (processResponse) resolve(responseBody); else resolve();
         });
       });

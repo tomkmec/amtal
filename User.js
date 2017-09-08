@@ -70,7 +70,7 @@ class User {
   _request(method, name, path, data, options) {
     var self = this;
 
-    return () => new Promise((resolve) => {
+    return () => new Promise((resolve, reject) => {
       path = new Function("return `"+path+"`;").call(self.context);
       var processResponse = _.has(options,'processResponse') ? options.processResponse : true;
 
@@ -114,7 +114,7 @@ class User {
         logEntry.error = e.message;
         this.publishRequest(logEntry)
         // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
-        resolve();
+        reject(e);
       });
       request.on('response', (res) => {
         logEntry.hrTime.firstResponse = process.hrtime(logEntry.hrTime.init);
@@ -142,15 +142,26 @@ class User {
           }
           logEntry.status = 'closed';
           // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
-          this.publishRequest(logEntry)
-          if (processResponse) resolve(responseBody); else resolve();
+          this.publishRequest(logEntry);
+
+          if (res.statusCode >= 300 && res.statusCode < 400) {
+            reject(`Redirects are not supported yet! ${res.req.method} ${res.req.path} Status: ${res.statusCode}`);
+          } else if (res.statusCode > 400 && res.statusCode != 401) {
+            let statusMessage = res.statusMessage || http.STATUS_CODES[res.statusCode] || 'UNKNOWN';
+            reject(`${res.req.method} ${res.req.path} [↔${util.ms(logEntry.hrTime.finish)}ms] `
+              + `${res.statusCode} ${statusMessage}\n${responseBody}`);
+          } else if (processResponse) {
+            resolve(responseBody);
+          } else {
+            resolve();
+          }
         });
-        res.on('error', () => {
+        res.on('error', e => {
           logEntry.hrTime.finish = process.hrtime(logEntry.hrTime.init);
           logEntry.status = 'error';
           // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
           this.publishRequest(logEntry)
-          if (processResponse) resolve(responseBody); else resolve();
+          if (processResponse) reject(responseBody); else reject(e);
         });
       });
 

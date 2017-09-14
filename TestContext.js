@@ -70,7 +70,9 @@ class TestContext {
       scenario(user)
         .then(() => this.runOrDestroy(scenarioNumber, user, scenario))
         .catch((error) => {
-          console.log(`Error while running scenario #${scenarioNumber} for user #${user.num}: ${error.stack}`);
+          let usersNow = this.users[scenarioNumber].length;
+          let timeRunning = util.formatTime(Date.now() - this.startTime);
+          console.error(`[X] [↳${timeRunning}] ≅${usersNow} U#${user.num} S#${scenarioNumber} ${error}`);
           this.runOrDestroy(scenarioNumber, user, scenario)
         });
     } else {

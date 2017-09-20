@@ -72,7 +72,7 @@ class TestContext {
         .catch((error) => {
           let usersNow = this.users[scenarioNumber].length;
           let timeRunning = util.formatTime(Date.now() - this.startTime);
-          console.error(`[X] [↳${timeRunning}] ≅${usersNow} U#${user.num} S#${scenarioNumber} ${error}`);
+          console.error(`[X] [↳${timeRunning}] ≅${usersNow} U#${user.num} S#${scenarioNumber} ${error} ${error.stack}`);
           this.runOrDestroy(scenarioNumber, user, scenario)
         });
     } else {

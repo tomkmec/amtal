@@ -51,10 +51,14 @@ var util = module.exports = {
 	},
 	getProp: function(object, prop) {
 		var dotPos = prop.indexOf('.');
-		if (dotPos == -1) {
-			return object[prop];
-		} else {
-			return util.getProp(object[prop.substring(0, dotPos)], prop.substring(dotPos + 1))
+		try {
+			if (dotPos == -1) {
+				return object[prop];
+			} else {
+				return util.getProp(object[prop.substring(0, dotPos)], prop.substring(dotPos + 1))
+			}
+		} catch (err) {
+			return null;
 		}
 	}
 }

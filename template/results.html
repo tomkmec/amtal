@@ -28,6 +28,8 @@
 </div>
 
 <h1> Concurrent Users and Transactions Length Over Time </h1>
+<input type="checkbox" id="t-max" name="t-max" checked="checked"><label for="t-max">Show Max</label>
+<input type="checkbox" id="t-avg" name="t-avg" checked="checked"><label for="t-avg">Show Avg</label>
 <div style="height:400px; width:100%;">
     <canvas id="t" width="100" height="100"></canvas>
 </div>
@@ -40,6 +42,8 @@
 </table>
 
 <h1> Concurrent Users and Requests Server Time Over Time </h1>
+<input type="checkbox" id="r-max" name="r-max" checked="checked"><label for="r-max">Show Max</label>
+<input type="checkbox" id="r-avg" name="r-avg" checked="checked"><label for="r-avg">Show Avg</label>
 <div style="height:400px; width:100%;">
     <canvas id="r" width="100" height="100"></canvas>
 </div>
@@ -65,11 +69,22 @@ var rpsChart = new Chart(document.getElementById("rps").getContext('2d'), {
     type: 'line',
     data: results.rpsData,
     options: {
+        legend: { position: "right" },            
         maintainAspectRatio: false,
         scales: {
             yAxes: [
-                { id: "1-s", position: 'right', ticks: { beginAtZero:true } },
-                { id: "1", position: 'left', ticks: { beginAtZero:true }  }
+                { 
+                    id: "1-s", 
+                    position: 'right', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"Requests per Second"} 
+                },
+                { 
+                    id: "1", 
+                    position: 'left', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"# of Concurrent Users"} 
+                }
             ]
         }
     }
@@ -79,11 +94,22 @@ var tChart = new Chart(document.getElementById("t").getContext('2d'), {
     type: 'line',
     data: results.tData,
     options: {
+        legend: { position: "right" },            
         maintainAspectRatio: false,
         scales: {
             yAxes: [
-                { id: "1", position: 'left', ticks: { beginAtZero:true }  },
-                { id: "ms", position: 'right', ticks: { beginAtZero:true } }
+                { 
+                    id: "1", 
+                    position: 'left', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"# of Concurrent Users"} 
+                },
+                { 
+                    id: "ms", 
+                    position: 'right', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"Duration [ms]"} 
+                }
             ]
         }
     }
@@ -94,14 +120,54 @@ var rChart = new Chart(document.getElementById("r").getContext('2d'), {
     data: results.rData,
     options: {
         maintainAspectRatio: false,
+        legend: { position: "right" },            
         scales: {
             yAxes: [
-                { id: "1", position: 'left', ticks: { beginAtZero:true }  },
-                { id: "ms", position: 'right', ticks: { beginAtZero:true } }
+                { 
+                    id: "1", 
+                    position: 'left', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"# of Concurrent Users"} 
+                },
+                { 
+                    id: "ms", 
+                    position: 'right', 
+                    ticks: { beginAtZero:true },
+                    scaleLabel: {display: true, labelString:"Duration [ms]"}  
+                }
             ]
         }
     }
 });
+
+var swap = {
+    tAvg: [],
+    tMax: [],
+    rAvg: [],
+    rMax: []
+};
+
+var charts = {
+    't': tChart,
+    'r': rChart
+};
+
+['t','r'].forEach(chart => {
+    ['Avg', 'Max'].forEach(series => {
+        var id = '#'+chart+'-'+series.toLowerCase();
+        $(id).on('click', e => {
+            if ($(id).prop("checked") && swap[chart+series].length > 0) {
+                charts[chart].data.datasets = charts[chart].data.datasets.concat(swap[chart+series]);
+                swap[chart+series] = [];
+            } else if (!$(id).prop("checked") && swap[chart+series].length == 0) {
+                swap[chart+series] = charts[chart].data.datasets.filter(s => s.label.substr(-4) == " "+series)
+                charts[chart].data.datasets = charts[chart].data.datasets.filter(s => s.label.substr(-4) != " "+series)
+            }
+            charts[chart].update();
+        });
+    });
+});
+
 
 $('#transactions thead').append(
     $('<tr>').append(

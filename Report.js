@@ -5,6 +5,51 @@ let fs = require('fs')
 
 let POSSIBLE_GRANURALITY = [1, 2, 5, 10, 30, 60, 120, 300, 600, 900];
 
+function _arrs(container, reqName, names) {
+  if (!container[reqName + " Count"]) {
+    container[reqName + " Count"] = [];
+    container[reqName + " Avg"] = [];
+    container[reqName + " Max"] = [];
+    names.add(reqName)
+  }
+  return [
+    container[reqName + " Count"],
+    container[reqName + " Avg"],
+    container[reqName + " Max"]
+  ]
+}
+
+function processStore(store, timeGranurality) {
+  return new Promise((resolve, reject) => {
+    let reportBase = {
+      req_s: []
+    };
+
+    let names = new Set();
+
+    store
+      .read()
+      .on("data", data => {
+        // console.log(data)
+        if (data && data.name && (data['timing.wait'] || data.duration)) {
+          var k = Math.floor(data.startTime/(1000 * timeGranurality));
+          if (!reportBase.req_s[k]) reportBase.req_s[k] = 0;
+          reportBase.req_s[k] += 1.0/timeGranurality;
+          var [counts, avg, max] = _arrs(reportBase, data.name, names);
+          var time = parseFloat(data['timing.wait'] || data.duration);
+          avg[k] = (((counts[k] || 0) * (avg[k] || 0) * timeGranurality) + time) / (((counts[k] || 0) * timeGranurality) + 1);
+          max[k] = Math.max(max[k] || 0, time);
+          counts[k] = (counts[k] || 0) + 1.0/timeGranurality;
+        }
+        // console.log(data);
+      })
+      .on("end", () => {
+         // console.log(reportBase.req_s);
+         resolve([reportBase, names]);
+      })
+  })
+}
+
 class Report {
   constructor(options) {
     this.options = _.defaults(options, {
@@ -14,223 +59,129 @@ class Report {
   }
 
   exportPromise() {
+    let self = this;
     return (testContext) => {
-      let rawData = testContext.requests;
+
       let userFn = testContext.userFn;
-      let testDuration = _.last(rawData).msFromStart/1000;
-      var timeGranurality = _.chain(POSSIBLE_GRANURALITY)
+      let testDuration = testContext.totalDuration / 1000;
+      let timeGranurality = _.chain(POSSIBLE_GRANURALITY)
         .reverse()
-        .find(g => testDuration/g >= this.options.minDatapoints)
+        .find(g => testDuration/g >= self.options.minDatapoints)
         .value() || 1;
 
-      var reportBase = {};
-      reportBase.req_s = _.chain(rawData)
-        .countBy(e => Math.floor(e.msFromStart/(1000 * timeGranurality)))
-        .mapObject((v,k) => v/timeGranurality)
-        .value();
-      reportBase.time = _.mapObject(reportBase.req_s, (value, key) => util.formatTime(1000 * key * timeGranurality))
-      reportBase.users = _.mapObject(reportBase.time, (value, key) => Math.max(0, userFn(1000 * key * timeGranurality)))
-      _.chain(rawData)
-        .groupBy(e => e.name)
-        .each((items, name) => {
-          var preprocessed = _.chain(items)
-            .groupBy((e => Math.floor(e.msFromStart/(1000 * timeGranurality))))
-            .mapObject(group => _.filter(group, e => e.timing && e.timing.wait));
-          reportBase[name+" Avg"] = preprocessed.mapObject(values => 
-            _.chain(values).reduce((memo, num) => memo + parseFloat(num.timing.wait), 0).value() / values.length
-          ).value();
-          reportBase[name+" Max"] = preprocessed.mapObject(values =>
-            _.chain(values).map(value=>parseFloat(value.timing.wait)).max().value()
-          ).value();
+      return Promise.all([
+        processStore(testContext.configuration.requestStore, timeGranurality),
+        processStore(testContext.configuration.transactionStore, timeGranurality)
+      ]).then((results) => new Promise((resolve, reject) => {
+        var time = _.range(Math.ceil(testContext.totalDuration / (1000 * timeGranurality))).map(i => util.formatTime(1000 * i * timeGranurality));
+        var users = 
+          _.range(Math.ceil(testContext.totalDuration / (1000 * timeGranurality)))
+            .map(i => {
+              var users = userFn(1000 * i * timeGranurality);
+              var totalUsers = (users === -1 ? 0 : users.reduce((memo, num) => memo + num, 0));
+              return Math.max(0, totalUsers);
+            });
+
+        var requests = [];
+        var transactions = [];
+        time.forEach((t, i) => {
+          requests[i] = {};
+          transactions[i] = {};
+
+          requests[i].time = transactions[i].time = t;
+          requests[i].users = transactions[i].users = users[i];
+
+          for (var k in results[0][0]) requests[i][k] = results[0][0][k][i];
+          for (var k in results[1][0]) transactions[i][k == "req_s" ? "transactions_s" : k] = results[1][0][k][i];
         });
-      let report = _.chain(util.invert(reportBase)).each((v,k)=>v.time_s=parseInt(k)).values().value();
 
-      //TODO extract the preprocessing, it's very similar
-      var transactionReportBase = {};
-      transactionReportBase.req_s = _.chain(testContext.transactions)
-        .countBy(t => Math.floor(t.startTime/(1000 * timeGranurality)))
-        .mapObject((v,k) => v/timeGranurality)
-        .value();
-      transactionReportBase.time = _.mapObject(transactionReportBase.req_s, (value, key) => util.formatTime(1000 * key * timeGranurality))
-      transactionReportBase.users = _.mapObject(transactionReportBase.time, (value, key) => Math.max(0, userFn(1000 * key * timeGranurality)))
-      _.chain(testContext.transactions)
-        .groupBy(e => e.name)
-        .each((items, name) => {
-          var preprocessed = _.chain(items)
-            .groupBy((e => Math.floor(e.startTime/(1000 * timeGranurality))))
-            .mapObject(group => _.filter(group, e => e.duration));
-          transactionReportBase[name+" Avg"] = preprocessed.mapObject(values => 
-            _.chain(values).reduce((memo, num) => memo + parseFloat(num.duration), 0).value() / values.length
-          ).value();
-          transactionReportBase[name+" Max"] = preprocessed.mapObject(values =>
-            _.chain(values).map(value=>parseFloat(value.duration)).max().value()
-          ).value();
-        });
-      let transactionsReport = _.chain(util.invert(transactionReportBase)).each((v,k)=>v.time_s=parseInt(k)).values().value();
+        resolve([requests, results[0][1], transactions, results[1][1]]);
+      })).then(([requests, [...requestNames], transactions, [...transactionNames]]) => Promise.all([
 
-      return Promise.resolve()
-        .then(() => new Promise((resolve, reject) => {
-          fs.mkdir(this.options.dir, (err) => {
-            if (!err || err.code == "EEXIST") resolve(); else reject(err);
-          });
-        }))
-        .then(() => Promise.all([
-          new Promise((resolve, reject) => {
-            let fpath = path.join(this.options.dir, "rawData.csv");
-            let headers = 
-            "Time from start [ms],Request name,Path,User #,Response code,Response bytes,Time send [ms],Time wait [ms], Time receive [ms], Time total [ms]";
-            let dataArray = rawData.map((r) => 
-              [r.msFromStart, r.name, r.path, r.user, r.statusCode, r.responseSize, r.timing.send, r.timing.wait, r.timing.recv, r.timing.total]);
-            fs.writeFile(
-              fpath, 
-              [headers].concat(dataArray.map(row => row.join(','))).join('\n'),
-              'utf8',
-              (err) => {
-                if (err) {
-                  console.log(`Error exporting raw data to ${fpath}: ${err.message}`);
-                  reject(err);
-                } else {
-                  console.log(`Exported raw data to ${fpath}`);
-                  resolve();
-                }
-              }
-            );
-          }),
-          new Promise((resolve, reject) => {
-            let fpath = path.join(this.options.dir, "rawTransactions.csv");
-            let headers = 
-            "Start time [ms],Transaction name,User #,Duration [ms]";
-            let dataArray = testContext.transactions.map((r) => 
-              [r.startTime, r.name, r.user, r.duration]);
-            fs.writeFile(
-              fpath, 
-              [headers].concat(dataArray.map(row => row.join(','))).join('\n'),
-              'utf8',
-              (err) => {
-                if (err) {
-                  console.log(`Error exporting raw data to ${fpath}: ${err.message}`);
-                  reject(err);
-                } else {
-                  console.log(`Exported raw data to ${fpath}`);
-                  resolve();
-                }
-              }
-            );
-          }),
-          new Promise((resolve, reject) => {
-            let fpath = path.join(this.options.dir, "requests.json");
-            fs.writeFile(
-              fpath, 
-              JSON.stringify(report, null, 2),
-              'utf8',
-              (err) => {
-                if (err) {
-                  console.log(`Error exporting report to ${fpath}: ${err.message}`);
-                  reject(err);
-                } else {
-                  console.log(`Exported report to ${fpath}`);
-                  resolve();
-                }
-              }
-            );
-          }),
-          new Promise((resolve, reject) => {
-            let fpath = path.join(this.options.dir, "requests.csv");
-            let basicKeys = ['time_s', 'time', 'req_s', 'users'];
-            let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
-            let header = "Time [s],Time,Requests per second,# of users," + dynKeys.join(",");
-            fs.writeFile(
-              fpath, 
-              [header].concat(report.map(r => basicKeys.concat(dynKeys).map(k => r[k]))).join('\n'),
-              'utf8',
-              (err) => {
-                if (err) {
-                  console.log(`Error exporting report to ${fpath}: ${err.message}`);
-                  reject(err);
-                } else {
-                  console.log(`Exported report to ${fpath}`);
-                  resolve();
-                }
-              }
-            );
-          }),
-          new Promise((resolve, reject) => {
-            fs.createReadStream(path.join(__dirname, 'template', 'results.html'))
-              .pipe(fs.createWriteStream(path.join(this.options.dir, "results.html")));
-            let fpath = path.join(this.options.dir, "chartData.js");
+        Promise.resolve({
+          requests: requests,
+          requestNames: requestNames,
+          transactions: transactions,
+          transactionNames: transactionNames
+        }),
 
-            let basicKeys = ['time_s', 'time', 'req_s', 'users'];
-            // let dynKeys = Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1);
-
-            let rpsData = {
-              labels: _.pluck(report, 'time'),
-              datasets: [{
-                label: 'Requests per Second',
-                data: _.pluck(report, 'req_s'),
-                yAxisID: '1-s'
-              }, {
-                label: '# of Concurrent Users',
-                data: _.pluck(report, 'users'),
-                yAxisID: '1'
-              }]
-            };
+        new Promise((resolve, reject) => {
 
 
-            let rData = {
-              labels: _.pluck(report, 'time'),
-              datasets: [{
-                label: '# of Concurrent Users',
-                data: _.pluck(report, 'users'),
-                yAxisID: '1'
-              }]
-            };
+          fs.createReadStream(path.join(__dirname, 'template', 'results.html'))
+            .pipe(fs.createWriteStream(path.join(this.options.dir, "results.html")));
+          let fpath = path.join(this.options.dir, "chartData.js");
 
-            Object.keys(reportBase).filter(k => basicKeys.indexOf(k) == -1).forEach(key => rData.datasets.push({
-              label: key,
-              data: _.pluck(report, key),
-              yAxisID: 'ms'
-            }))
+          let rpsData = {
+            labels: _.pluck(requests, 'time'),
+            datasets: [{
+              label: '# of Concurrent Users',
+              data: _.pluck(requests, 'users'),
+              yAxisID: '1',
+              borderDash: [5, 5]
+            }, {
+              label: 'Requests per Second',
+              data: _.pluck(requests, 'req_s'),
+              yAxisID: '1-s'
+            }]
+          };
 
 
-            let tData = {
-              labels: _.pluck(transactionsReport, 'time'),
-              datasets: [{
-                label: '# of Concurrent Users',
-                data: _.pluck(transactionsReport, 'users'),
-                yAxisID: '1'
-              }]
-            };
+          let rData = {
+            labels: _.pluck(requests, 'time'),
+            datasets: [{
+              label: '# of Concurrent Users',
+              data: _.pluck(requests, 'users'),
+              yAxisID: '1',
+              borderDash: [5, 5]
+            }]
+          };
 
-            Object.keys(transactionReportBase).filter(k => basicKeys.indexOf(k) == -1).forEach(key => tData.datasets.push({
-              label: key,
-              data: _.pluck(transactionsReport, key),
-              yAxisID: 'ms'
-            }))
+          requestNames.forEach(key => rData.datasets.push(
+            { label: key + " Avg", data: _.pluck(requests, key + " Avg"), yAxisID: 'ms'},
+            { label: key + " Max", data: _.pluck(requests, key + " Max"), yAxisID: 'ms'}
+          ));
 
-            let chartOptions = {
+          let tData = {
+            labels: _.pluck(transactions, 'time'),
+            datasets: [{
+              label: '# of Concurrent Users',
+              data: _.pluck(transactions, 'users'),
+              yAxisID: '1',
+              borderDash: [5, 5]
+            }]
+          };
+
+          transactionNames.forEach(key => tData.datasets.push(
+            { label: key + " Avg", data: _.pluck(transactions, key + " Avg"), yAxisID: 'ms'},
+            { label: key + " Max", data: _.pluck(transactions, key + " Max"), yAxisID: 'ms'}
+          ));
+
+          let chartOptions = {
               yAxes: [
-                { id: "1-s", position: 'left' },
-                { id: "1", position: 'left' },
-                { id: "ms", position: 'right' }
-              ]
-            };
+              { id: "1-s", position: 'left' },
+              { id: "1", position: 'left' },
+              { id: "ms", position: 'right' }
+            ]
+          };
 
-            fs.writeFile(
-              fpath, 
-              `let results = {\n type: 'line', options: ${JSON.stringify(chartOptions, null, 2)},\n rpsData: ${JSON.stringify(rpsData, null, 2)},\n rData: ${JSON.stringify(rData, null, 2)},\n tData: ${JSON.stringify(tData, null, 2)}\n};`,
-              'utf8',
-              (err) => {
-                if (err) {
-                  console.log(`Error exporting chart data to ${fpath}: ${err.message}`);
-                  reject(err);
-                } else {
-                  console.log(`Exported chart data to ${fpath}`);
-                  resolve();
-                }
+          fs.writeFile(
+            fpath, 
+            `let results = {\n type: 'line', options: ${JSON.stringify(chartOptions, null, 2)},\n rpsData: ${JSON.stringify(rpsData, null, 2)},\n rData: ${JSON.stringify(rData, null, 2)},\n tData: ${JSON.stringify(tData, null, 2)}\n};`,
+            'utf8',
+            (err) => {
+              if (err) {
+                console.log(`Error exporting chart data to ${fpath}: ${err.message}`);
+                reject(err);
+              } else {
+                console.log(`Exported chart data to ${fpath}`);
+                resolve();
               }
-            );
-          })
-        ]))
+            }
+          );
+        })
+      ]))
+      .then(preprocessed => new Promise((resolve, reject) => resolve(preprocessed)));
     }
   }
 }

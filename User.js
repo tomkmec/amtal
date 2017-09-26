@@ -6,12 +6,13 @@ let _ = require('underscore')
   , TestContext = require('./TestContext.js')
 
 class User {
-  constructor(num, testContext) {
+  constructor(scenarioNumber, num, testContext) {
     this.agents = {
       'http:' : new http.Agent({keepAlive: true}),
       'https:' : new https.Agent({keepAlive: true})
     };
     this.num = num;
+    this.scenarioNumber = scenarioNumber;
     this.testContext = testContext;
   }
 
@@ -33,6 +34,7 @@ class User {
       self.activeTransactions[name] = {
         name: name,
         startTime: Date.now() - self.testContext.startTime,
+        scenarioNumber: this.scenarioNumber,
         user: self.num
       }
       resolve();
@@ -72,12 +74,10 @@ class User {
 
     return () => new Promise((resolve, reject) => {
       path = new Function("return `"+path+"`;").call(self.context);
-      var processResponse = _.has(options,'processResponse') ? options.processResponse : true;
+      var processResponse = _.has(options, 'processResponse') ? options.processResponse : true;
 
       var httpOptions = _.extend({
         protocol: 'http:',
-        // host: host,
-        // port: 80,
         method: method,
         path: path,
         headers: {}
@@ -97,14 +97,11 @@ class User {
         name: name,
         path: path,
         user: self.num,
+        scenarioNumber: this.scenarioNumber,
         hrTime: { init: process.hrtime() },
-        msFromStart: Date.now() - this.testContext.startTime,
+        startTime: Date.now() - this.testContext.startTime,
         responseSize: 0
       }
-      // var logEntryId;
-
-      this.testContext.requests.push(logEntry);
-      // logCollection.insertOne(logEntry, (error, result) => logEntryId = result.insertedId)
 
       var request = protocols[httpOptions.protocol].request(httpOptions);
       var responseBody = '';
@@ -113,14 +110,12 @@ class User {
         logEntry.status = 'error';
         logEntry.error = e.message;
         this.publishRequest(logEntry)
-        // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
         reject(e);
       });
       request.on('response', (res) => {
         logEntry.hrTime.firstResponse = process.hrtime(logEntry.hrTime.init);
         logEntry.status = 'receiving';
         logEntry.statusCode = res.statusCode;
-        // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
         (res.headers['set-cookie'] || []).forEach((c) => {
           var keyValue = c.split(';')[0].split('=');
           self.jar.set(keyValue[0],keyValue[1])
@@ -141,7 +136,6 @@ class User {
             total: util.ms(logEntry.hrTime.finish)
           }
           logEntry.status = 'closed';
-          // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
           this.publishRequest(logEntry);
 
           if (res.statusCode >= 300 && res.statusCode < 400) {
@@ -159,7 +153,6 @@ class User {
         res.on('error', e => {
           logEntry.hrTime.finish = process.hrtime(logEntry.hrTime.init);
           logEntry.status = 'error';
-          // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
           this.publishRequest(logEntry)
           if (processResponse) reject(responseBody); else reject(e);
         });
@@ -170,21 +163,20 @@ class User {
       request.end(null, null, () => {
         logEntry.status = 'sent';
         logEntry.hrTime.sent = process.hrtime(logEntry.hrTime.init);
-        // if (logEntryId) logCollection.replaceOne({_id:logEntryId}, logEntry);
       });
     });
   }
 
-  GET(name, path, processResponse = true) {
-    return this._request('GET', name, path, null, processResponse)
+  GET(name, path, options) {
+    return this._request('GET', name, path, null, options)
   }
 
-  POST(name, path, data, processResponse = true) {
-    return this._request('POST', name, path, JSON.stringify(data), processResponse)
+  POST(name, path, data, options) {
+    return this._request('POST', name, path, JSON.stringify(data), options)
   }
 
-  PUT(name, path, data, processResponse = true) {
-    return this._request('PUT', name, path, JSON.stringify(data), processResponse)
+  PUT(name, path, data, options) {
+    return this._request('PUT', name, path, JSON.stringify(data), options)
   }
 
   wait(seconds) {

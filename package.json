@@ -1,6 +1,6 @@
 {
 	"name": "amtal",
-	"version": "0.3.2",
+	"version": "0.4.0",
 	"description": "To know a thing well, know its limits. Only when pushed beyond its tolerances will true nature be seen.",
 	"keywords": ["load test", "stress test", "performance test"],
 	"author": {
@@ -13,6 +13,7 @@
 		"url": "https://github.com/tomkmec/amtal.git"
 	},
 	"dependencies" : {
-		"underscore" : "1.8.x"
+		"underscore" : "1.8.x",
+		"fast-csv" : "2.4.x"
 	}
 }

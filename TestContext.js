@@ -1,4 +1,5 @@
 let User = require('./User.js')
+  , CSVFileStore = require('./CSVFileStore.js')
   , util = require('./util.js')
   , _ = require('underscore')
 
@@ -14,7 +15,20 @@ class TestContext {
       process.exit(1);
     }
 
-    this.configuration = configuration;
+    this.configuration = _.defaults(configuration, {
+      requestStore: new CSVFileStore(
+        '_requests.csv', {
+          headerCSV: "Time from start [ms],Request name,Path,Scenario #,User #,Response code,Response bytes,Time send [ms],Time wait [ms], Time receive [ms], Time total [ms]",
+          properties: ['startTime', 'name', 'path', 'scenarioNumber', 'user', 'statusCode', 'responseSize', 'timing.send', 'timing.wait', 'timing.recv', 'timing.total']
+        }
+      ),
+      transactionStore: new CSVFileStore(
+        '_transactions.csv', {
+          headerCSV: "Start time [ms],Transaction name,Scenario #,User #,Duration [ms]", 
+          properties: ['startTime', 'name', 'scenarioNumber', 'user', 'duration']
+        }
+      )    
+    });
     this.requests = [];
     this.transactions = [];
     this.users = _.map(new Array(this.rampup.length), x => []);
@@ -58,7 +72,7 @@ class TestContext {
   }
 
   startUser(scenarioNumber, number, scenario) {
-    var user = new User(number, this);
+    var user = new User(scenarioNumber, number, this);
     this.users[scenarioNumber].push(user);
 
     this.runOrDestroy(scenarioNumber, user, scenario);
@@ -80,6 +94,7 @@ class TestContext {
       this.users[scenarioNumber] = _.without(this.users[scenarioNumber], user);
       util.log(Date.now() - this.startTime, this, true)
       if (this.userFn(Date.now() - this.startTime) === -1 && _.flatten(this.users).length == 0) {
+        this.totalDuration = Date.now() - this.startTime;
         this.finalResoluton(this);
       }
     }

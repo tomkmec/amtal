@@ -30,20 +30,20 @@ class User {
 
   begin(name) {
     var self = this;
-    return () => new Promise((resolve) => {
+    return (data) => new Promise((resolve) => {
       self.activeTransactions[name] = {
         name: name,
         startTime: Date.now() - self.testContext.startTime,
         scenarioNumber: this.scenarioNumber,
         user: self.num
       }
-      resolve();
+      resolve(data);
     });
   }
 
   end(name) {
     var self = this;
-    return () => new Promise((resolve) => {
+    return (data) => new Promise((resolve) => {
       if (!!self.activeTransactions[name]) {
         var currentTime = Date.now() - self.testContext.startTime;
         var transaction = _.extend(self.activeTransactions[name], {
@@ -53,7 +53,7 @@ class User {
         self.testContext.transactions.push(transaction)
         this.publishTransaction(transaction)
       }
-      resolve();
+      resolve(data);
     });
   }
 

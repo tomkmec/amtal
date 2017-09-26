@@ -26,6 +26,7 @@ function processStore(store, timeGranurality) {
     };
 
     let names = new Set();
+    let count = 0;
 
     store
       .read()
@@ -40,12 +41,13 @@ function processStore(store, timeGranurality) {
           avg[k] = (((counts[k] || 0) * (avg[k] || 0) * timeGranurality) + time) / (((counts[k] || 0) * timeGranurality) + 1);
           max[k] = Math.max(max[k] || 0, time);
           counts[k] = (counts[k] || 0) + 1.0/timeGranurality;
+          count++;
         }
         // console.log(data);
       })
       .on("end", () => {
          // console.log(reportBase.req_s);
-         resolve([reportBase, names]);
+         resolve([reportBase, names, count]);
       })
   })
 }
@@ -69,10 +71,17 @@ class Report {
         .find(g => testDuration/g >= self.options.minDatapoints)
         .value() || 1;
 
-      return Promise.all([
+      return Promise.resolve()
+      .then(() => new Promise((resolve, reject) => {
+        fs.mkdir(self.options.dir, (err) => {
+          if (!err || err.code == "EEXIST") resolve(); else reject(err);
+        });
+      }))
+      .then(() => Promise.all([
         processStore(testContext.configuration.requestStore, timeGranurality),
         processStore(testContext.configuration.transactionStore, timeGranurality)
-      ]).then((results) => new Promise((resolve, reject) => {
+      ]))
+      .then((results) => new Promise((resolve, reject) => {
         var time = _.range(Math.ceil(testContext.totalDuration / (1000 * timeGranurality))).map(i => util.formatTime(1000 * i * timeGranurality));
         var users = 
           _.range(Math.ceil(testContext.totalDuration / (1000 * timeGranurality)))
@@ -95,14 +104,16 @@ class Report {
           for (var k in results[1][0]) transactions[i][k == "req_s" ? "transactions_s" : k] = results[1][0][k][i];
         });
 
-        resolve([requests, results[0][1], transactions, results[1][1]]);
-      })).then(([requests, [...requestNames], transactions, [...transactionNames]]) => Promise.all([
+        resolve([requests, results[0][1], results[0][2], transactions, results[1][1], results[1][2]]);
+      })).then(([requests, [...requestNames], requestCount, transactions, [...transactionNames], transactionCount]) => Promise.all([
 
         Promise.resolve({
           requests: requests,
           requestNames: requestNames,
+          requestCount: requestCount,
           transactions: transactions,
-          transactionNames: transactionNames
+          transactionNames: transactionNames,
+          transactionCount: transactionCount
         }),
 
         new Promise((resolve, reject) => {
@@ -181,7 +192,7 @@ class Report {
           );
         })
       ]))
-      .then(preprocessed => new Promise((resolve, reject) => resolve(preprocessed)));
+      .then(preprocessed => new Promise((resolve, reject) => resolve(preprocessed[0])));
     }
   }
 }
